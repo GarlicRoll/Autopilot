@@ -8,8 +8,9 @@ if __name__ == '__main__' :
     tracker = cv2.TrackerCSRT_create()
  
     # Read video
-    video = cv2.VideoCapture("test.mp4")
- 
+    video = cv2.VideoCapture("test2.mp4")
+    
+    
     # Exit if video not opened.
     if not video.isOpened():
         print ("Could not open video")
@@ -29,7 +30,19 @@ if __name__ == '__main__' :
  
     # Initialize tracker with first frame and bounding box
     ok = tracker.init(frame, bbox)
- 
+    
+
+    # Capturing video
+    (grabbed, frame) = camera.read()
+    fshape = frame.shape
+    fheight = fshape[0]
+    fwidth = fshape[1]
+    print fwidth , fheight
+    fourcc = cv2.VideoWriter_fourcc(*'XVID')
+    out = cv2.VideoWriter('output.avi',fourcc, 20.0, (fwidth,fheight))
+    out = cv2.VideoWriter('output.avi', -1, 20.0, (640,480))
+
+
     while True:
         # Read a new frame
         ok, frame = video.read()
@@ -41,7 +54,10 @@ if __name__ == '__main__' :
  
         # Update tracker
         ok, bbox = tracker.update(frame)
- 
+
+        # Capturing
+        out.write(frame)
+
         # Calculate Frames per second (FPS)
         fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer);
  
@@ -67,3 +83,6 @@ if __name__ == '__main__' :
         # Exit if ESC pressed
         k = cv2.waitKey(1) & 0xff
         if k == 27 : break
+
+    video.release()
+    out.release()
