@@ -8,14 +8,21 @@ import numpy as np
 import cv2 
 import sys
 
+# 1) Выделение области + пробел
+# 2) Esc для выхода обратно в выделение области
+# 3) Esc второй раз для выхода и корректной остановки записи
+# *) Ваше окошечко записывается при работе 
+
 if __name__ == '__main__' :
     
     # установка трекера
     fourcc = cv2.VideoWriter_fourcc(*'XVID')
     out = cv2.VideoWriter('output_test4.avi', fourcc, 15.0, (1280,  720)) # 640 480
-    tracker = cv2.TrackerCSRT_create()
- 
-    # считывае6м поток 
+    tracker = cv2.TrackerCSRT.create() # tracker = cv2.TrackerCSRT_create()
+    # tracker = cv2.TrackerDaSiamRPN.create()
+    # tracker = cv2.TrackerKCF.create()
+
+    # считываем поток 
     video = cv2.VideoCapture(0)
     ret, frame = video.read()
     while True:
@@ -59,7 +66,7 @@ if __name__ == '__main__' :
          #контуры    
          сontours, _ = cv2.findContours(Image_Sobel, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE) # нахождение массива контурных точек
          
-         
+         box_for_tracking = (0, 0, 0, 0)
          #механизм отрисовки всех контуров более 500
          for contour in сontours:
              (x, y, w, h) = cv2.boundingRect(contour) # преобразование массива из предыдущего этапа в кортеж из четырех координат
@@ -69,7 +76,7 @@ if __name__ == '__main__' :
              if cv2.contourArea(contour) > 500: # условие при котором площадь выделенного объекта меньше 500 px
                  print(cv2.contourArea(contour))
                  cv2.rectangle(frame, (x, y), (x+w, y+h), (0, 255, 0), 2) # получение прямоугольника из точек кортежа
-
+                 box_for_tracking = (x, y, w, h) # Выбираем последний квадратик
 
          """  
          for contour in сontours:
@@ -77,17 +84,20 @@ if __name__ == '__main__' :
                  сontours.remove(contour)
         """ 
         
-         cv2.imshow('frame', frame)
+        # cv2.imshow('frame', frame)
             
          # записыаем в видео кадр с детекцией
          for _ in range(10):
              out.write(frame)
          # --- Трекинг через CSRT Tracker ---    
          # получим координаты рамки
-         bbox = cv2.selectROI('frame', frame, False)
-      
+         # bbox = cv2.selectROI('frame', frame, False)
+         print(box_for_tracking)
+         # в случае, если ничего не задетектили
+         if box_for_tracking == (0, 0, 0, 0):
+            box_for_tracking = (240, 170, 80, 130)
          # инициализация трекинга
-         ok = tracker.init(frame, bbox)
+         ok = tracker.init(frame, box_for_tracking)
       
          while True:
              # считываем новый кадр
@@ -102,7 +112,7 @@ if __name__ == '__main__' :
              ok, bbox = tracker.update(frame)
       
              # считаем количесво кадров в секунду 
-             fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer);
+             fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
              cv2.circle(frame, (340,240), radius=0, color=(0, 255, 0), thickness=10)
              # выделим йднное
              if ok:
