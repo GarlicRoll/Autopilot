@@ -16,7 +16,9 @@ print(socket_address)
 server_socket.bind(socket_address)
 print('Listening at:',socket_address)
 
-vid = cv2.VideoCapture(0)
+video = "..\Additional\output_test3.avi"
+#video = 0
+vid = cv2.VideoCapture(video)
 fps,st,frames_to_count,cnt = (0,0,20,0)
 
 while True:
@@ -28,6 +30,8 @@ while True:
 		frame = imutils.resize(frame,width=WIDTH)
 		encoded,buffer = cv2.imencode('.jpg',frame,[cv2.IMWRITE_JPEG_QUALITY,80])
 		message = base64.b64encode(buffer)
+		if video != 0:
+			time.sleep(0.05)
 		server_socket.sendto(message,client_addr)
 		frame = cv2.putText(frame,'FPS: '+str(fps),(10,40),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,0,255),2)
 		cv2.imshow('TRANSMITTING VIDEO',frame)

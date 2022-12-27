@@ -6,6 +6,9 @@ import time
 import base64
 
 from SiamFC.tracker import TrackerSiamFC
+from DaSiamRPN.tracker import TrackerDaSiamRPN
+
+boxes = []
 
 def detection():
     # --- Детекция через фильтр (без накопления кадров) ---
@@ -42,6 +45,28 @@ def detection():
         cv2.rectangle(mask, (q, b), (e, c), 255, -1)
         # масочная фильтрация
         Image_Sobel = mask & Image_Sobel
+
+        # Определяем ядро
+        kernel = np.ones((7, 7), np.uint8)
+ 
+        # opening the image
+        closing = cv2.morphologyEx(Image_Sobel, cv2.MORPH_CLOSE, kernel, iterations=1)
+
+        blur = cv2.GaussianBlur(closing, (5, 5), 0) # фильтрация лишних контуров
+        _, thresh = cv2.threshold(blur, 20, 255, cv2.THRESH_BINARY) # метод для выделения кромки объекта белым цветом
+
+        # Определяем ядро
+        kernel = np.ones((8, 8), np.uint8)
+        # opening the image
+        opening = cv2.morphologyEx(thresh, cv2.MORPH_OPEN,
+                                kernel, iterations=1)
+
+        # Определяем ядро
+        kernel = np.ones((20, 20), np.uint8)
+        # opening the image
+        opening = cv2.morphologyEx(opening, cv2.MORPH_CLOSE,
+                                kernel, iterations=1)
+
         # контуры
         сontour_points, _ = cv2.findContours(Image_Sobel, cv2.RETR_TREE,
                                              cv2.CHAIN_APPROX_SIMPLE)  # нахождение массива контурных точек
@@ -58,6 +83,8 @@ def detection():
                 print(cv2.contourArea(point))
                 cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0),
                               2)  # получение прямоугольника из точек кортежа
+
+                boxes.append((x, y, w, h))
                 box_for_tracking = (x, y, w, h)  # Выбираем последний квадратик
 
         """  
@@ -87,9 +114,11 @@ fps,st,frames_to_count,cnt = (0,0,20,0)
 
 tracker_name = "SiamFC"
 if tracker_name == "CSRT":
-	tracker = cv2.TrackerCSRT.create()  # tracker = cv2.TrackerCSRT_create()
+    tracker = cv2.TrackerCSRT.create()  # tracker = cv2.TrackerCSRT_create()
 elif tracker_name == "SiamFC":
-	tracker = TrackerSiamFC("./SiamFC/model.pth") 
+    tracker = TrackerSiamFC("./SiamFC/model.pth")
+elif tracker_name == "DaSiamRPN":
+    tracker = TrackerDaSiamRPN("./DaSiamRPN/model.pth")
 
 box_for_tracking = (0, 0, 0, 0)
 
@@ -97,63 +126,69 @@ fourcc = cv2.VideoWriter_fourcc(*'XVID')
 video_output = cv2.VideoWriter('output_test4.avi', fourcc, 15.0, (1280,  720)) # 640 480
 
 while True:
-	packet,_ = client_socket.recvfrom(BUFF_SIZE)
-	data = base64.b64decode(packet,' /')
-	npdata = np.fromstring(data,dtype=np.uint8)
-	frame = cv2.imdecode(npdata,1)
-	#frame = cv2.putText(frame,'FPS: '+str(fps),(10,40),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,0,255),2)
+    packet,_ = client_socket.recvfrom(BUFF_SIZE)
+    data = base64.b64decode(packet,' /')
+    npdata = np.fromstring(data,dtype=np.uint8)
+    frame = cv2.imdecode(npdata,1)
+    #frame = cv2.putText(frame,'FPS: '+str(fps),(10,40),cv2.FONT_HERSHEY_SIMPLEX,0.7,(0,0,255),2)
 
 	###############
-	timer = cv2.getTickCount()
+    timer = cv2.getTickCount()
             
-	if box_for_tracking == (0, 0, 0, 0):
-		box_for_tracking = detection()
-		if box_for_tracking != (0, 0, 0, 0):
-	        # --- Трекинг через Tracker ---
-			ok = tracker.init(frame, box_for_tracking)
-	else:
+    if box_for_tracking == (0, 0, 0, 0):
+        box_for_tracking = detection()
+        # print("Num ob boxes: " + str(len(boxes)) + "\nEnter 0-" + str(len(boxes) - 1))
+        # num = int(input())
+        # box_for_tracking = boxes[num]
+
+        if box_for_tracking != (0, 0, 0, 0):
+            # --- Трекинг через Tracker ---
+            ok = tracker.init(frame, box_for_tracking)
+    else:
         # обновим трекер
-		if tracker_name == "CSRT":
-			ok, bbox = tracker.update(frame)
-		elif tracker_name == "SiamFC":
-			bbox = tracker.update(frame)
+        if tracker_name == "CSRT":
+            ok, bbox = tracker.update(frame)
+        elif tracker_name == "SiamFC":
+            bbox = tracker.update(frame)
+        elif tracker_name == "DaSiamRPN":
+            bbox = tracker.update(frame)
 
         # считаем количесво кадров в секунду
-		fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
-		cv2.circle(frame, (340, 240), radius=0, color=(0, 255, 0), thickness=10)
+        fps = cv2.getTickFrequency() / (cv2.getTickCount() - timer)
+        cv2.circle(frame, (340, 240), radius=0, color=(0, 255, 0), thickness=10)
         # выделим йднное
-		if (ok and tracker_name == "CSRT") or (tracker_name == "SiamFC"):
-			p1 = (int(bbox[0]), int(bbox[1]))
-			p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
-			#cv2.rectangle(frame, p1, p2, (255, 0, 0), 2, 1)
-			cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3])), (0, 255, 255), 3)
-		else:
+        if (ok and tracker_name == "CSRT") or (tracker_name == "SiamFC"):
+            p1 = (int(bbox[0]), int(bbox[1]))
+            p2 = (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3]))
+            # cv2.rectangle(frame, p1, p2, (255, 0, 0), 2, 1)
+            cv2.rectangle(frame, (int(bbox[0]), int(bbox[1])), (int(bbox[0] + bbox[2]), int(bbox[1] + bbox[3])), (0, 255, 255), 3)
+        else:
             # Tracking failure
-			cv2.putText(frame, "ERROR", (100, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
-			box_for_tracking = (0, 0, 0, 0)
+            cv2.putText(frame, "ERROR", (100, 80), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (0, 0, 255), 2)
+            box_for_tracking = (0, 0, 0, 0)
 
         # навание трекинга
-		cv2.putText(frame, tracker_name + " Tracker", (100, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50, 170, 50), 2)
+        cv2.putText(frame, tracker_name + " Tracker", (100, 20), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50, 170, 50), 2)
 
         # кадры в секунду
-		cv2.putText(frame, "FPS : " + str(int(fps)), (100, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50, 170, 50), 2)
+        cv2.putText(frame, "FPS : " + str(int(fps)), (100, 50), cv2.FONT_HERSHEY_SIMPLEX, 0.75, (50, 170, 50), 2)
 
-		video_output.write(frame)
+        video_output.write(frame)
     ########
 
-	cv2.imshow("RECEIVING VIDEO",frame)
-	key = cv2.waitKey(1) & 0xFF
-	if key == ord('q'):
-		client_socket.close()
-		break
-	if cnt == frames_to_count:
-		try:
-			fps = round(frames_to_count/(time.time()-st))
-			st=time.time()
-			cnt=0
-		except:
-			pass
-	cnt+=1
+    cv2.imshow("RECEIVING VIDEO",frame)
+    key = cv2.waitKey(1) & 0xFF
+    if key == ord('q'):
+        client_socket.close()
+        break
+    if cnt == frames_to_count:
+        try:
+            fps = round(frames_to_count/(time.time()-st))
+            st=time.time()
+            cnt=0
+        except:
+            pass
+    cnt+=1
 
 '''
 @inproceedings{Zhu_2018_ECCV,
